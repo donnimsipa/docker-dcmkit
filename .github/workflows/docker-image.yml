@@ -1,0 +1,63 @@
+name: Docker Hub Image
+
+on:
+  push:
+    branches: [ "master" ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step to check out the code
+    - uses: actions/checkout@v4
+
+      # Step to log in to Docker Hub using credentials from secrets
+    - name: Log in to Docker Hub
+      run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      # Step to build and push Docker images
+    - name: Build and Push Docker Images
+      env:
+        DOCKER_HUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      run: |
+        TAG=${GITHUB_REF##*/} # Extract the tag from the GitHub ref
+        echo "Using tag: $TAG"
+
+        # Define the combinations of flags (t=true, f=false)
+        combinations=(
+          "t|t|f"
+          "t|f|t"
+          "t|f|f"
+          "f|t|t"
+          "f|t|f"
+        )
+
+        # Iterate through each combination and build/push images
+        for combo in "${combinations[@]}"; do
+          IFS='|' read -r dcmtk_enabled gdcm_enabled net_enabled <<< "$combo"
+          
+          # Create tag suffixes based on the enabled options
+          tag_suffix=""
+          [[ "$dcmtk_enabled" == "t" ]] && tag_suffix+="-dcmtk"
+          [[ "$gdcm_enabled" == "t" ]] && tag_suffix+="-gdcm"
+          [[ "$net_enabled" == "t" ]] && tag_suffix+="-net"
+
+          # Final tag to use for Docker image
+          final_tag="${TAG}${tag_suffix}"
+
+          echo "Building Docker image with tag: ${final_tag}"
+
+          # Build the Docker image with the correct build arguments
+          docker build . --file Dockerfile --tag "${DOCKER_HUB_USERNAME}/docker-dcmkit:${final_tag}" \
+            --build-arg DCMTK=$([ "$dcmtk_enabled" == "t" ] && echo true || echo false) \
+            --build-arg GDCM=$([ "$gdcm_enabled" == "t" ] && echo true || echo false) \
+            --build-arg NET=$([ "$net_enabled" == "t" ] && echo true || echo false)
+
+          echo "Pushing Docker image: ${DOCKER_HUB_USERNAME}/docker-dcmkit:${final_tag}"
+          docker push "${DOCKER_HUB_USERNAME}/docker-dcmkit:${final_tag}"
+        done
