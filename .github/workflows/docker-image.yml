@@ -2,11 +2,8 @@ name: Docker Hub Image
 
 on:
   push:
-    branches: [ "master" ]
     tags:
       - 'v*'
-  pull_request:
-    branches: [ "master" ]
 
 jobs:
   build:
@@ -31,6 +28,7 @@ jobs:
         # Define the combinations of flags (t=true, f=false)
         combinations=(
           "t|t|f"
+          "t|t|t"
           "t|f|t"
           "t|f|f"
           "f|t|t"
